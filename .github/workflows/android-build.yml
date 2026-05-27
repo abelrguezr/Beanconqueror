@@ -20,7 +20,7 @@ jobs:
           java-version: '11'
 
       - name: Setup Android SDK (cmdline tools)
-        uses: r0adkll/setup-android@v2
+        uses: android-actions/setup-android@v2
         with:
           api-level: 33
           target: android-33
