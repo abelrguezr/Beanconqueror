@@ -264,25 +264,38 @@ export class CoffeeBluetoothDevicesService {
       const foundDevices = [];
       this.scanAllBluetoothDevicesAndPassBack(
         (scanDevice) => {
-          let type;
+          // Determine all matching device types for this peripheral.
+          const toEmit: Array<any> = [];
+
           if (_searchingType === BluetoothTypes.SCALE) {
-            type = this.getScaleDeviceType(scanDevice);
+            const t = this.getScaleDeviceType(scanDevice);
+            if (t) toEmit.push(t);
           } else if (_searchingType === BluetoothTypes.PRESSURE) {
-            type = this.getPressureDeviceType(scanDevice);
+            const pressureType = this.getPressureDeviceType(scanDevice);
+            const tempType = this.getTemperatureDeviceType(scanDevice);
+            if (pressureType) toEmit.push(pressureType);
+            // Also emit temperature device if present so one peripheral registers both
+            if (tempType) toEmit.push(tempType);
           } else if (_searchingType === BluetoothTypes.TEMPERATURE) {
-            type = this.getTemperatureDeviceType(scanDevice);
+            const tempType = this.getTemperatureDeviceType(scanDevice);
+            const pressureType = this.getPressureDeviceType(scanDevice);
+            if (tempType) toEmit.push(tempType);
+            // Also emit pressure device when scanning for temperature
+            if (pressureType) toEmit.push(pressureType);
           } else if (_searchingType === BluetoothTypes.TDS) {
-            type = this.getRefractometerDeviceType(scanDevice);
+            const t = this.getRefractometerDeviceType(scanDevice);
+            if (t) toEmit.push(t);
           }
 
-          if (type) {
+          for (const type of toEmit) {
             if (scanDevice && scanDevice.name) {
               type.name = scanDevice.name;
             } else {
               type.name = '';
             }
-            if (foundDevices.indexOf(type.id) === -1) {
-              foundDevices.push(type.id);
+            const dedupeKey = `${type.id}|${type.type}`;
+            if (foundDevices.indexOf(dedupeKey) === -1) {
+              foundDevices.push(dedupeKey);
               subscriber.next(type);
 
               this.logger.log(
