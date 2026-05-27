@@ -5,6 +5,7 @@ The instructions given are very brief, but should show you how to get started.
 
 Make yourself familiar with our tech stack, which uses [Ionic](https://ionicframework.com/), [Angular](https://angular.dev/), and [Capacitor](https://capacitorjs.com/).
 
+
 ## Prerequisites
 
 You need to have the following prerequisites
