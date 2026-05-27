@@ -29,22 +29,28 @@ jobs:
         with:
           node-version: '18'
 
-      - name: Cache node modules
+      - name: Enable Corepack and install pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@latest --activate
+          pnpm -v
+
+      - name: Cache pnpm store
         uses: actions/cache@v4
         with:
-          path: ~/.npm
-          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          path: ~/.pnpm-store
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: |
-            ${{ runner.os }}-node-
+            ${{ runner.os }}-pnpm-
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Install dependencies (pnpm)
+        run: pnpm install --no-frozen-lockfile
 
       - name: Build web assets
-        run: npm run build
+        run: pnpm run build
 
       - name: Capacitor sync Android
-        run: npx cap sync android
+        run: pnpm exec cap sync android
 
       - name: Prepare Android build (make gradlew executable)
         run: chmod +x android/gradlew
