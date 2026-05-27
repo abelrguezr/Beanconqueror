@@ -31,6 +31,10 @@ jobs:
 
       - name: Enable Corepack and install pnpm
         run: |
+          # Remove packageManager field from package.json if present (avoid Corepack error)
+          if [ -f package.json ]; then
+            sed -i.bak '/"packageManager"\s*:/d' package.json || true
+          fi
           corepack enable
           COREPACK_IGNORE_PNPM_CONFIG=1 corepack prepare pnpm@latest --activate
           pnpm -v
