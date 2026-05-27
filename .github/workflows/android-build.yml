@@ -1,8 +1,8 @@
 name: Android CI Build
 
+# Trigger on pushes to any branch and allow manual dispatch
 on:
-  push:
-    branches: [ "main", "master", "develop", "developing", "v8.6.0" ]
+  push: {}
   workflow_dispatch:
 
 jobs:
