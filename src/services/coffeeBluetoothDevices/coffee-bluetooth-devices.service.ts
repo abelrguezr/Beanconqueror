@@ -103,6 +103,24 @@ export class CoffeeBluetoothDevicesService {
     if (Capacitor.getPlatform() === 'android') {
       this.androidPermissions = cordova.plugins.permissions;
     }
+
+    // Create a Virtual Temperature device so Temperature view exists by default
+    try {
+      const virtualPeripheral: PeripheralData = {
+        id: 'virtual-temp',
+        name: 'Virtual Temp',
+        advertising: new ArrayBuffer(0),
+        rssi: 0,
+        characteristics: [],
+      } as unknown as PeripheralData;
+      this.temperatureDevice = makeTemperatureDevice(
+        TemperatureType.VIRTUAL,
+        virtualPeripheral,
+      );
+      this.logger.log('Virtual temperature device created');
+    } catch (ex) {
+      this.logger.log('Could not create virtual temperature device: ' + ex);
+    }
   }
 
   public attachOnEvent(): Observable<CoffeeBluetoothServiceEvent> {
