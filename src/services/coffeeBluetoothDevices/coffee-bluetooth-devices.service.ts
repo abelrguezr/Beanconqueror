@@ -86,6 +86,7 @@ export class CoffeeBluetoothDevicesService {
   public scale: BluetoothScale | null = null;
   public pressureDevice: PressureDevice | null = null;
   public temperatureDevice: TemperatureDevice | null = null;
+  public virtualTemperatureDevice: TemperatureDevice | null = null;
   public refractometerDevice: RefractometerDevice | null = null;
   public failed: boolean;
   public ready: boolean;
@@ -105,6 +106,27 @@ export class CoffeeBluetoothDevicesService {
     if (Capacitor.getPlatform() === 'android') {
       this.androidPermissions = cordova.plugins.permissions;
     }
+
+    // Create a persistent virtual temperature device that's always available
+    try {
+      const virtualData: PeripheralData = {
+        id: `virtual-ESPROFILE-temp`,
+        name: `ESPROFILE (virtual-temp)`,
+        advertising: {} as any,
+        rssi: 0,
+        characteristics: [],
+      };
+      const virt = makeTemperatureDevice(
+        TemperatureType.COFFEESENSOR,
+        virtualData,
+      );
+      if (virt) {
+        (virt as any).isVirtual = true;
+        this.virtualTemperatureDevice = virt;
+        // expose it as connected to the rest of the app
+        this.__sendEvent(CoffeeBluetoothServiceEvent.CONNECTED_TEMPERATURE);
+      }
+    } catch (ex) {}
   }
 
   public attachOnEvent(): Observable<CoffeeBluetoothServiceEvent> {
@@ -1356,7 +1378,7 @@ export class CoffeeBluetoothDevicesService {
           // create a virtual temperature device bound to same physical peripheral
           const virtualData: PeripheralData = Object.assign({}, data, {
             id: `${data.id}-temp`,
-            name: data.name ? `${data.name} (temp)` : data.name,
+            name: data.name ? `${data.name} (virtual-temp)` : data.name,
           });
           const temp = makeTemperatureDevice(
             TemperatureType.COFFEESENSOR,
@@ -1485,6 +1507,23 @@ export class CoffeeBluetoothDevicesService {
                   }
                 } catch (ex) {}
               }
+            }
+            // Also update persistent virtual temperature device if present
+            if (this.virtualTemperatureDevice) {
+              try {
+                this.virtualTemperatureDevice.batteryLevel = batteryPercent;
+                if ((this.virtualTemperatureDevice as any).setTemp) {
+                  (this.virtualTemperatureDevice as any).setTemp(
+                    probeTemperature,
+                    view.buffer,
+                  );
+                } else {
+                  this.virtualTemperatureDevice.setTemperature(
+                    probeTemperature,
+                    view.buffer,
+                  );
+                }
+              } catch (ex) {}
             }
           } catch (ex) {}
         },
