@@ -1,6 +1,7 @@
 import { PeripheralData } from './ble.types';
 import { Logger } from './common/logger';
 import { PressureDevice } from './pressureBluetoothDevice';
+import { EventEmitter } from '@angular/core';
 
 declare var ble: any;
 
@@ -27,6 +28,7 @@ export class CoffeeSensorPressure extends PressureDevice {
   public static COMBINED_CHAR = '11282dae-6e9c-4223-b6d7-c67878832826';
 
   private logger: Logger;
+  public temperatureChange: EventEmitter<number> = new EventEmitter();
 
   constructor(data: PeripheralData) {
     super(data);
@@ -91,6 +93,7 @@ export class CoffeeSensorPressure extends PressureDevice {
       return;
     }
 
+    const rawTemperature = view.getFloat32(4, true);
     const pressureBarAbsolute = view.getFloat32(8, true);
     const pressureBar =
       pressureBarAbsolute - CoffeeSensorPressure.ATMOSPHERIC_BAR;
@@ -107,6 +110,12 @@ export class CoffeeSensorPressure extends PressureDevice {
         batteryPercent +
         '%',
     );
+
+    // Emit probe temperature for listeners (virtual device, UI, etc.)
+    try {
+      const probeTemp = rawTemperature;
+      this.temperatureChange.emit(probeTemp);
+    } catch (ex) {}
 
     this.setPressure(pressureBar, view.buffer, new Float32Array([pressureBar]));
   }

@@ -1364,6 +1364,22 @@ export class CoffeeBluetoothDevicesService {
       this.logger.log('Pressure Connected successfully');
       // this.uiToast.showInfoToast('PRESSURE.CONNECTED_SUCCESSFULLY');
       this.__sendEvent(CoffeeBluetoothServiceEvent.CONNECTED_PRESSURE);
+
+      // If a virtual temperature device exists, forward probe temperature updates
+      try {
+        if (
+          this.pressureDevice &&
+          (this.pressureDevice as any).temperatureChange &&
+          this.temperatureDevice &&
+          (this.temperatureDevice as any).setVirtualTemperature
+        ) {
+          (this.pressureDevice as any).temperatureChange.subscribe((t: number) => {
+            try {
+              (this.temperatureDevice as any).setVirtualTemperature(t);
+            } catch (ex) {}
+          });
+        }
+      } catch (ex) {}
     }
   }
 
