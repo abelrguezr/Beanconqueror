@@ -1483,7 +1483,7 @@ export class CoffeeBluetoothDevicesService {
                 );
                 this.pressureDevice.batteryLevel = batteryPercent;
                 // setPressure expects (value, rawData, parsedData)
-                this.pressureDevice.setPressure(
+                (this.pressureDevice as any).setPressure(
                   pressureBar,
                   view.buffer,
                   new Float32Array([pressureBar]),
@@ -1500,7 +1500,7 @@ export class CoffeeBluetoothDevicesService {
                   'CombinedNotification -> dispatching to temperatureDevice',
                 );
                 this.temperatureDevice.batteryLevel = batteryPercent;
-                this.temperatureDevice.setTemperature(
+                (this.temperatureDevice as any).setTemperature(
                   probeTemperature,
                   view.buffer,
                 );
