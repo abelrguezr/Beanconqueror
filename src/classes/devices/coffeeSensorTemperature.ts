@@ -108,4 +108,9 @@ export class CoffeeSensorTemperature extends TemperatureDevice {
       (e: any) => {},
     );
   }
+
+  // Public helper for external callers (e.g., central service or pressure device)
+  public setTemp(newTemp: number, rawData: any) {
+    this.setTemperature(newTemp, rawData);
+  }
 }

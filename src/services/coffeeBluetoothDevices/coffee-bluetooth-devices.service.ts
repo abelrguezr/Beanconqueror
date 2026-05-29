@@ -53,7 +53,6 @@ import { PopsiclePressure } from '../../classes/devices/popsiclePressure';
 import { SkaleScale } from '../../classes/devices/skale';
 import { TransducerDirectPressure } from '../../classes/devices/transducerDirectPressure';
 import { VariaAkuScale } from '../../classes/devices/variaAku';
-import { VirtualTemperatureDevice } from '../../classes/devices/virtualTemperatureDevice';
 import BLUETOOTH_TRACKING from '../../data/tracking/bluetoothTracking';
 import { UIAnalytics } from '../uiAnalytics';
 import { UIHelper } from '../uiHelper';
@@ -95,7 +94,6 @@ export class CoffeeBluetoothDevicesService {
   private androidPermissions: any = null;
   // Track which device ids we've subscribed combined notifications for
   private combinedNotificationDeviceIds: Set<string> = new Set();
-  private static readonly VIRTUAL_TEMPERATURE_ID = 'virtual-temperature';
 
   private scanBluetoothTimeout: any = null;
 
@@ -106,24 +104,6 @@ export class CoffeeBluetoothDevicesService {
 
     if (Capacitor.getPlatform() === 'android') {
       this.androidPermissions = cordova.plugins.permissions;
-    }
-
-    // Provide a persistent virtual temperature device so the UI can display
-    // a separate temperature source that will be fed by combined notifications
-    // from pressure-capable peripherals.
-    try {
-      const peripheral = {
-        id: CoffeeBluetoothDevicesService.VIRTUAL_TEMPERATURE_ID,
-        name: 'Virtual Temperature (from Pressure)',
-      } as any;
-      this.temperatureDevice = new VirtualTemperatureDevice(peripheral);
-      this.logger.log(
-        'Initialized virtual temperature device: ' + peripheral.id,
-      );
-      // Notify listeners that a temperature device is (virtually) connected
-      this.__sendEvent(CoffeeBluetoothServiceEvent.CONNECTED_TEMPERATURE);
-    } catch (ex) {
-      // ignore
     }
   }
 
@@ -297,16 +277,7 @@ export class CoffeeBluetoothDevicesService {
             const tempType = this.getTemperatureDeviceType(scanDevice);
             if (pressureType) toEmit.push(pressureType);
             // Also emit temperature device if present so one peripheral registers both
-            // Emit temperature as a distinct fake id (append '-temp') so UI treats it as separate device
-            if (tempType) {
-              const tempClone = { ...tempType };
-              try {
-                tempClone.id = `${scanDevice.id}-temp`;
-              } catch (ex) {
-                tempClone.id = `${tempType.id}-temp`;
-              }
-              toEmit.push(tempClone);
-            }
+            if (tempType) toEmit.push(tempType);
           } else if (_searchingType === BluetoothTypes.TEMPERATURE) {
             const tempType = this.getTemperatureDeviceType(scanDevice);
             const pressureType = this.getPressureDeviceType(scanDevice);
@@ -1210,18 +1181,12 @@ export class CoffeeBluetoothDevicesService {
         ' and type ' +
         temperatureType,
     );
-    // Map fake temperature ids ("<realId>-temp") to underlying real device id
-    const requestedId = deviceId;
-    const actualDeviceId =
-      deviceId && deviceId.endsWith('-temp')
-        ? deviceId.replace(/-temp$/, '')
-        : deviceId;
     try {
-      ble.connect(
-        actualDeviceId,
+      ble.autoConnect(
+        deviceId,
         (data: PeripheralData) => {
           this.logger.log(
-            'AutoConnectTemperatureDevice - Temperature device connected (connect).',
+            'AutoConnectTemperatureDevice - Temperature device connected.',
           );
           this.uiAnalytics.trackEvent(
             BLUETOOTH_TRACKING.TITLE,
@@ -1229,21 +1194,6 @@ export class CoffeeBluetoothDevicesService {
             temperatureType,
           );
           this.connectTemperatureCallback(temperatureType, data);
-
-          // If the caller requested a fake id, map the created instance to that id
-          try {
-            if (
-              requestedId &&
-              requestedId !== actualDeviceId &&
-              this.temperatureDevice
-            ) {
-              (this.temperatureDevice as any).source_device_id = actualDeviceId;
-              this.temperatureDevice.device_id = requestedId;
-            }
-            // Ensure combined notification is active for the real peripheral id
-            this.ensureCombinedNotification(actualDeviceId);
-          } catch (ex) {}
-
           successCallback();
 
           try {
@@ -1262,7 +1212,7 @@ export class CoffeeBluetoothDevicesService {
         },
         () => {
           this.logger.log(
-            'AutoConnectTemperatureDevice - Temperature device disconnected (connect).',
+            'AutoConnectTemperatureDevice - Temperature device disconnected.',
           );
           const settings = this.uiStettingsStorage.getSettings();
           if (settings.bluetooth_devices_show_connection_messages === true) {
@@ -1398,22 +1348,36 @@ export class CoffeeBluetoothDevicesService {
       this.logger.log('Pressure Connected successfully');
       // this.uiToast.showInfoToast('PRESSURE.CONNECTED_SUCCESSFULLY');
       this.__sendEvent(CoffeeBluetoothServiceEvent.CONNECTED_PRESSURE);
-      // Ensure a single combined characteristic notification is active per peripheral
+      // Ensure a temperature device exists for the same peripheral so it
+      // can be updated by the combined notification (acts as always-connected)
       try {
         const deviceId = this.pressureDevice.device_id;
+        if (!this.temperatureDevice) {
+          // create a virtual temperature device bound to same physical peripheral
+          const virtualData: PeripheralData = Object.assign({}, data, {
+            id: `${data.id}-temp`,
+            name: data.name ? `${data.name} (temp)` : data.name,
+          });
+          const temp = makeTemperatureDevice(
+            TemperatureType.COFFEESENSOR,
+            virtualData,
+          );
+          if (temp) {
+            // Mark which physical device id this virtual temperature device is bound to
+            (temp as any).boundDeviceId = data.id;
+            this.temperatureDevice = temp;
+            this.__sendEvent(CoffeeBluetoothServiceEvent.CONNECTED_TEMPERATURE);
+          }
+        }
         this.ensureCombinedNotification(deviceId);
       } catch (ex) {}
     }
   }
 
   private disconnectPressureCallback() {
-    let deviceId: string | null = null;
+    let deviceId: string | undefined = undefined;
     if (this.pressureDevice) {
-      try {
-        deviceId = this.pressureDevice.device_id;
-      } catch (ex) {
-        deviceId = null;
-      }
+      deviceId = this.pressureDevice.device_id;
       this.pressureDevice.disconnect();
       this.pressureDevice = null;
       // this.uiToast.showInfoToast('PRESSURE.DISCONNECTED_UNPLANNED');
@@ -1421,11 +1385,11 @@ export class CoffeeBluetoothDevicesService {
     }
     // Stop combined notification if no longer needed
     try {
-      const tempMatches =
-        this.temperatureDevice &&
-        (this.temperatureDevice.device_id === deviceId ||
-          (this.temperatureDevice as any)?.source_device_id === deviceId);
-      if (deviceId && !tempMatches) {
+      if (
+        deviceId &&
+        (!this.temperatureDevice ||
+          this.temperatureDevice.device_id !== deviceId)
+      ) {
         ble.stopNotification(
           deviceId,
           CoffeeSensorPressure.DATA_SERVICE,
@@ -1451,6 +1415,13 @@ export class CoffeeBluetoothDevicesService {
       this.logger.log('Temperature Connected successfully');
       // this.uiToast.showInfoToast('PRESSURE.CONNECTED_SUCCESSFULLY');
       this.__sendEvent(CoffeeBluetoothServiceEvent.CONNECTED_TEMPERATURE);
+      // Ensure a single combined characteristic notification is active per peripheral
+      try {
+        const boundPhysicalId =
+          (this.temperatureDevice as any).boundDeviceId ||
+          this.temperatureDevice.device_id;
+        this.ensureCombinedNotification(boundPhysicalId);
+      } catch (ex) {}
     }
   }
 
@@ -1478,56 +1449,42 @@ export class CoffeeBluetoothDevicesService {
             const pressureBar = pressureBarAbsolute - 0.98;
             const batteryPercent = view.getUint8(16);
 
-            // Diagnostic log: parsed values
-            try {
-              this.logger.log(
-                'CombinedNotification - deviceId: ' +
-                  deviceId +
-                  ' temp: ' +
-                  probeTemperature +
-                  ' pressure: ' +
-                  pressureBar +
-                  ' battery: ' +
-                  batteryPercent,
-              );
-            } catch (ex) {}
-
             // Dispatch to instances if present and matching device id
             if (
               this.pressureDevice &&
               this.pressureDevice.device_id === deviceId
             ) {
               try {
-                this.logger.log(
-                  'CombinedNotification -> dispatching to pressureDevice',
-                );
                 this.pressureDevice.batteryLevel = batteryPercent;
                 // setPressure expects (value, rawData, parsedData)
-                (this.pressureDevice as any).setPressure(
+                this.pressureDevice.setPressure(
                   pressureBar,
                   view.buffer,
                   new Float32Array([pressureBar]),
                 );
               } catch (ex) {}
             }
-            if (
-              this.temperatureDevice &&
-              (this.temperatureDevice.device_id === deviceId ||
-                (this.temperatureDevice as any)?.source_device_id ===
-                  deviceId ||
-                this.temperatureDevice.device_id ===
-                  CoffeeBluetoothDevicesService.VIRTUAL_TEMPERATURE_ID)
-            ) {
-              try {
-                this.logger.log(
-                  'CombinedNotification -> dispatching to temperatureDevice',
-                );
-                this.temperatureDevice.batteryLevel = batteryPercent;
-                (this.temperatureDevice as any).setTemperature(
-                  probeTemperature,
-                  view.buffer,
-                );
-              } catch (ex) {}
+            if (this.temperatureDevice) {
+              const boundId =
+                (this.temperatureDevice as any).boundDeviceId ||
+                this.temperatureDevice.device_id;
+              if (boundId === deviceId) {
+                try {
+                  this.temperatureDevice.batteryLevel = batteryPercent;
+                  // Prefer `setTemp` if implemented on specific device class
+                  if ((this.temperatureDevice as any).setTemp) {
+                    (this.temperatureDevice as any).setTemp(
+                      probeTemperature,
+                      view.buffer,
+                    );
+                  } else {
+                    this.temperatureDevice.setTemperature(
+                      probeTemperature,
+                      view.buffer,
+                    );
+                  }
+                } catch (ex) {}
+              }
             }
           } catch (ex) {}
         },
@@ -1538,16 +1495,12 @@ export class CoffeeBluetoothDevicesService {
   }
 
   private disconnectTemperatureCallback() {
-    let deviceId: string | null = null;
+    let deviceId: string | undefined = undefined;
+    let boundPhysicalId: string | undefined = undefined;
     if (this.temperatureDevice) {
-      try {
-        // device_id may be a fake id ("...-temp"); determine underlying real id if set
-        deviceId =
-          (this.temperatureDevice as any)?.source_device_id ||
-          this.temperatureDevice.device_id;
-      } catch (ex) {
-        deviceId = null;
-      }
+      deviceId = this.temperatureDevice.device_id;
+      boundPhysicalId =
+        (this.temperatureDevice as any).boundDeviceId || deviceId;
       this.temperatureDevice.disconnect();
       this.temperatureDevice = null;
       // this.uiToast.showInfoToast('PRESSURE.DISCONNECTED_UNPLANNED');
@@ -1555,19 +1508,19 @@ export class CoffeeBluetoothDevicesService {
     }
     // Stop combined notification if no longer needed
     try {
-      const pressureMatches =
-        this.pressureDevice &&
-        (this.pressureDevice.device_id === deviceId ||
-          (this.pressureDevice as any)?.source_device_id === deviceId);
-      if (deviceId && !pressureMatches) {
+      if (
+        boundPhysicalId &&
+        (!this.pressureDevice ||
+          this.pressureDevice.device_id !== boundPhysicalId)
+      ) {
         ble.stopNotification(
-          deviceId,
+          boundPhysicalId,
           CoffeeSensorPressure.DATA_SERVICE,
           CoffeeSensorPressure.COMBINED_CHAR,
           () => {},
           () => {},
         );
-        this.combinedNotificationDeviceIds.delete(deviceId);
+        this.combinedNotificationDeviceIds.delete(boundPhysicalId);
       }
     } catch (ex) {}
 
