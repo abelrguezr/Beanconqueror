@@ -31,7 +31,6 @@ export class CoffeeSensorTemperature extends TemperatureDevice {
   constructor(data: PeripheralData) {
     super(data);
     this.logger = new Logger('CoffeeSensorTemperature');
-    this.connect();
   }
 
   public static test(device: any): boolean {
@@ -45,7 +44,7 @@ export class CoffeeSensorTemperature extends TemperatureDevice {
   }
 
   public connect() {
-    this.attachNotification();
+    // Notification handled centrally by CoffeeBluetoothDevicesService
   }
 
   public disconnect() {

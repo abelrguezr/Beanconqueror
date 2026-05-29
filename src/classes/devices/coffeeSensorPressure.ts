@@ -31,7 +31,6 @@ export class CoffeeSensorPressure extends PressureDevice {
   constructor(data: PeripheralData) {
     super(data);
     this.logger = new Logger('CoffeeSensorPressure');
-    this.connect();
   }
 
   public static test(device: any): boolean {
@@ -45,7 +44,7 @@ export class CoffeeSensorPressure extends PressureDevice {
   }
 
   public connect() {
-    this.attachNotification();
+    // Notification handled centrally by CoffeeBluetoothDevicesService
   }
 
   public disconnect() {

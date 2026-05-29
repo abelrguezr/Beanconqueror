@@ -53,6 +53,7 @@ import { PopsiclePressure } from '../../classes/devices/popsiclePressure';
 import { SkaleScale } from '../../classes/devices/skale';
 import { TransducerDirectPressure } from '../../classes/devices/transducerDirectPressure';
 import { VariaAkuScale } from '../../classes/devices/variaAku';
+import { VirtualTemperatureDevice } from '../../classes/devices/virtualTemperatureDevice';
 import BLUETOOTH_TRACKING from '../../data/tracking/bluetoothTracking';
 import { UIAnalytics } from '../uiAnalytics';
 import { UIHelper } from '../uiHelper';
@@ -94,6 +95,7 @@ export class CoffeeBluetoothDevicesService {
   private androidPermissions: any = null;
   // Track which device ids we've subscribed combined notifications for
   private combinedNotificationDeviceIds: Set<string> = new Set();
+  private static readonly VIRTUAL_TEMPERATURE_ID = 'virtual-temperature';
 
   private scanBluetoothTimeout: any = null;
 
@@ -104,6 +106,24 @@ export class CoffeeBluetoothDevicesService {
 
     if (Capacitor.getPlatform() === 'android') {
       this.androidPermissions = cordova.plugins.permissions;
+    }
+
+    // Provide a persistent virtual temperature device so the UI can display
+    // a separate temperature source that will be fed by combined notifications
+    // from pressure-capable peripherals.
+    try {
+      const peripheral = {
+        id: CoffeeBluetoothDevicesService.VIRTUAL_TEMPERATURE_ID,
+        name: 'Virtual Temperature (from Pressure)',
+      } as any;
+      this.temperatureDevice = new VirtualTemperatureDevice(peripheral);
+      this.logger.log(
+        'Initialized virtual temperature device: ' + peripheral.id,
+      );
+      // Notify listeners that a temperature device is (virtually) connected
+      this.__sendEvent(CoffeeBluetoothServiceEvent.CONNECTED_TEMPERATURE);
+    } catch (ex) {
+      // ignore
     }
   }
 
@@ -1493,7 +1513,10 @@ export class CoffeeBluetoothDevicesService {
             if (
               this.temperatureDevice &&
               (this.temperatureDevice.device_id === deviceId ||
-                (this.temperatureDevice as any)?.source_device_id === deviceId)
+                (this.temperatureDevice as any)?.source_device_id ===
+                  deviceId ||
+                this.temperatureDevice.device_id ===
+                  CoffeeBluetoothDevicesService.VIRTUAL_TEMPERATURE_ID)
             ) {
               try {
                 this.logger.log(

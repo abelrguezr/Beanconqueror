@@ -81,7 +81,7 @@ export abstract class PressureDevice {
     });
   }
 
-  protected setPressure(
+  public setPressure(
     _newPressure: number,
     _rawData: any,
     _parsedData: Uint16Array | Float32Array | any,

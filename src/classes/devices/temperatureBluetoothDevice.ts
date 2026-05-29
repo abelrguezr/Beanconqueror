@@ -79,7 +79,7 @@ export abstract class TemperatureDevice {
     });
   }
 
-  protected setTemperature(_newTemperature: number, _rawData: any) {
+  public setTemperature(_newTemperature: number, _rawData: any) {
     if (Date.now() - this.lastTemperatureSetTime < UPDATE_EVERY_MS) {
       return;
     }
