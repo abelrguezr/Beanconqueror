@@ -40,6 +40,7 @@ import {
   TemperatureType,
 } from './types';
 import { VariaAkuScale } from './variaAku';
+import { VirtualTemperatureDevice } from './virtualTemperatureDevice';
 import { WeighMyBruScale } from './weighMyBruScale';
 
 export { BluetoothScale, SCALE_TIMER_COMMAND } from './bluetoothDevice';
@@ -137,6 +138,8 @@ export function makeTemperatureDevice(
       return new GeisingerThermometer(data);
     case TemperatureType.COFFEESENSOR:
       return new CoffeeSensorTemperature(data);
+    case TemperatureType.VIRTUAL:
+      return new VirtualTemperatureDevice(data);
     default:
       return null;
   }

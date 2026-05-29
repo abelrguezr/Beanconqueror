@@ -42,6 +42,7 @@ export enum TemperatureType {
   ARGOS = 'ARGOS',
   GEISINGER = 'GEISINGER',
   COFFEESENSOR = 'COFFEESENSOR',
+  VIRTUAL = 'VIRTUAL',
 }
 
 export enum RefractometerType {
