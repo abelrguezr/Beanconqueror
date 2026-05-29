@@ -31,12 +31,7 @@ import { refreshOutline } from 'ionicons/icons';
 import { TranslatePipe } from '@ngx-translate/core';
 import { finalize, Subscription } from 'rxjs';
 
-import {
-  BluetoothTypes,
-  ScaleType,
-  sleep,
-  TemperatureType,
-} from '../../classes/devices';
+import { BluetoothTypes, ScaleType, sleep } from '../../classes/devices';
 import { Preparation } from '../../classes/preparation/preparation';
 import { Settings } from '../../classes/settings/settings';
 import { HeaderButtonComponent } from '../../components/header/header-button.component';
@@ -365,24 +360,6 @@ export class BluetoothDeviceChooserPopoverComponent
       //this.uiAnalytics.trackEvent(SETTINGS_TRACKING.TITLE, SETTINGS_TRACKING.ACTIONS.SCALE.CATEGORY,scale.type);
 
       await this.saveSettings();
-
-      // If the device also exposes temperature under the same peripheral name, auto-connect temperature too
-      try {
-        if (
-          pressureDevice &&
-          pressureDevice.name &&
-          pressureDevice.name.toLowerCase().includes('esprofile')
-        ) {
-          // Attempt to auto-connect temperature device on same id
-          this.bleManager.autoConnectTemperatureDevice(
-            TemperatureType.COFFEESENSOR,
-            pressureDevice.id,
-            false,
-            () => {},
-            () => {},
-          );
-        }
-      } catch (ex) {}
     } else {
       this.uiAlert.showMessage(
         'PRESSURE.CONNECTION_NOT_ESTABLISHED',
